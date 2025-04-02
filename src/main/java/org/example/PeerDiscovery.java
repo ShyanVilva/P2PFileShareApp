@@ -25,10 +25,13 @@ public class PeerDiscovery {
 
         @Override
         public void serviceResolved(ServiceEvent event) {
+            String name = event.getName();
+            String ip = event.getInfo().getInetAddresses()[0].getHostAddress();
+            int port = event.getInfo().getPort();
+
+            Friend.addFriend(name, ip, port);
             System.out.printf("%s connected from IP %s on port %d%n",
-                    event.getName(),
-                    event.getInfo().getInetAddresses()[0].getHostAddress(),
-                    event.getInfo().getPort());
+                    name, ip, port);
         }
     }
 
@@ -45,8 +48,8 @@ public class PeerDiscovery {
 
         discoveryThread = new Thread(() -> {
             try {
-                jmdns = JmDNS.create(InetAddress.getByName("192.168.2.250"));
-                jmdns.addServiceListener("_http._tcp.local.", new SampleListener());
+                jmdns = JmDNS.create(InetAddress.getByName("192.168.2.75"));
+                jmdns.addServiceListener("_secureshare._tcp.local.", new SampleListener());
                 isDiscovering = true;
 
 
