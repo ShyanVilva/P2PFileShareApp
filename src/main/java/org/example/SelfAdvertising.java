@@ -1,15 +1,12 @@
 package org.example;
 
-import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
+import java.io.*;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.security.KeyPair;
-import java.security.PublicKey;
 import javax.jmdns.JmDNS;
 import javax.jmdns.ServiceInfo;
+import java.util.List;
 
 public class SelfAdvertising {
     private static JmDNS jmdns;
@@ -17,11 +14,6 @@ public class SelfAdvertising {
     private static Thread serviceThread;
     private static ServerSocket serverSocket;
     private static boolean isAdvertising = false;
-    private static KeyPair keyPair;
-
-    public static void setKeyPair(KeyPair kp) {
-        keyPair = kp;
-    }
 
     public static void startAdvertising() {
         if (isAdvertising) {
@@ -55,7 +47,6 @@ public class SelfAdvertising {
                     try {
                         Socket clientSocket = serverSocket.accept();
                         System.out.println("New connection from: " + clientSocket.getInetAddress());
-                        // Handle connection in new thread
                         handleClient(clientSocket);
                     } catch (IOException e) {
                         if (!serverSocket.isClosed()) {
@@ -74,39 +65,66 @@ public class SelfAdvertising {
 
     private static void handleClient(Socket clientSocket) {
         Thread clientThread = new Thread(() -> {
-            try (ObjectOutputStream out = new ObjectOutputStream(clientSocket.getOutputStream());
-                 ObjectInputStream in = new ObjectInputStream(clientSocket.getInputStream())) {
+            try {
+                OutputStream out = clientSocket.getOutputStream();
+                InputStream in = clientSocket.getInputStream();
+                byte[] buffer = new byte[1024];
 
-                // Get their challenge
-                byte[] theirChallenge = (byte[]) in.readObject();
+                System.out.println("Client connected: " + clientSocket.getInetAddress());
 
-                // Sign and send back
-                byte[] signature = MutualAuthentication.signChallenge(keyPair.getPrivate(), theirChallenge);
-                out.writeObject(signature);
+                while (true) {
+                    // Send menu
+                    String menu = "\n=== Server Menu ===\n" +
+                            "1. List Files\n" +
+                            "2. Disconnect\n" +
+                            "Choose an option: ";
+                    out.write(menu.getBytes("UTF-8"));
+                    out.flush();
+                    System.out.println("Menu sent to client");
 
-                // Get their public key
-                PublicKey theirPublicKey = (PublicKey) in.readObject();
+                    // Read client's choice
+                    int bytesRead = in.read(buffer);
+                    if (bytesRead == -1) {
+                        System.out.println("Client disconnected");
+                        break;
+                    }
 
-                // Send our challenge
-                byte[] ourChallenge = MutualAuthentication.generateChallenge();
-                out.writeObject(ourChallenge);
+                    String command = new String(buffer, 0, bytesRead, "UTF-8").trim();
+                    System.out.println("Received command: '" + command + "'");
 
-                // Get their signature
-                byte[] theirSignature = (byte[]) in.readObject();
+                    switch (command) {
+                        case "1":
+                            System.out.println("Processing list files command");
+                            String sharedDirectory = "shared";
+                            List<FileManager.FileInfo> files = FileManager.getDirectoryListing(sharedDirectory);
 
-                // Send our public key
-                out.writeObject(keyPair.getPublic());
+                            StringBuilder response = new StringBuilder("Files available:\n");
+                            for (FileManager.FileInfo file : files) {
+                                response.append(file.toString()).append("\n");
+                            }
+                            response.append("End of list\n");
 
-                if (MutualAuthentication.verifyChallengeSignature(theirPublicKey, ourChallenge, theirSignature)) {
-                    // Send our service name
-                    out.writeObject(serviceInfo.getName());
-                    System.out.println("Authentication successful with " + clientSocket.getInetAddress());
-                } else {
-                    System.out.println("Authentication failed with " + clientSocket.getInetAddress());
+                            out.write(response.toString().getBytes("UTF-8"));
+                            out.flush();
+                            System.out.println("Files list sent");
+                            break;
+
+                        case "2":
+                            System.out.println("Client requested disconnect");
+                            return;
+
+                        default:
+                            String error = "Invalid option.\n";
+                            out.write(error.getBytes("UTF-8"));
+                            out.flush();
+                            System.out.println("Sent error response");
+                            break;
+                    }
                 }
 
             } catch (Exception e) {
                 System.out.println("Error handling client: " + e.getMessage());
+                e.printStackTrace();
             }
         });
         clientThread.start();

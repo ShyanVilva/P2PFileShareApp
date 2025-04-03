@@ -1,42 +1,32 @@
 package org.example;
 
-import java.security.*;
 import java.util.Scanner;
 
 public class Main {
-    private static KeyPair keyPair;
-
     public static void main(String[] args) {
-        try {
-            // Generate key pair at startup
-            KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA");
-            keyGen.initialize(2048);
-            keyPair = keyGen.generateKeyPair();
+        Scanner scanner = new Scanner(System.in);
+        boolean running = true;
 
-            // Set the key pair in SelfAdvertising
-            SelfAdvertising.setKeyPair(keyPair);
+        while (running) {
+            System.out.println("\n=== LAN Service Menu ===");
+            System.out.println("1. Start Advertising");
+            System.out.println("2. Start Peer Discovery");
+            System.out.println("3. Connect to Friend");
+            System.out.println("4. Check Server Status");
+            System.out.println("5. Exit");
+            System.out.print("Choose an option: ");
 
-            Scanner scanner = new Scanner(System.in);
-            boolean running = true;
+            String input = scanner.nextLine().trim();
 
-            while (running) {
-                System.out.println("\n=== LAN Service Menu ===");
-                System.out.println("1. Start Advertising");
-                System.out.println("2. Start Peer Discovery");
-                System.out.println("3. Connect to Friend");
-                System.out.println("4. Exit");
-                System.out.print("Choose an option: ");
-
-                String input = scanner.nextLine().trim();
-
+            try {
                 switch (input) {
                     case "1":
                         SelfAdvertising.startAdvertising();
-                        sleep10Seconds();
+                        Thread.sleep(5000);
                         break;
                     case "2":
                         PeerDiscovery.startDiscovery();
-                        sleep10Seconds();
+                        Thread.sleep(5000);
                         break;
                     case "3":
                         System.out.println("\n=== Friends List ===");
@@ -47,37 +37,30 @@ public class Main {
                         if (!friendName.isEmpty()) {
                             Friend friend = Friend.getFriend(friendName);
                             if (friend != null) {
-                                SocketClient client = new SocketClient(keyPair);
+                                SocketClient client = new SocketClient();
                                 client.connect(friend.getIpAddress(), friend.getPort());
                             } else {
                                 System.out.println("Friend not found.");
                             }
                         }
-                        sleep10Seconds();
                         break;
                     case "4":
+                        SelfAdvertising.getServerInfo();
+                        Thread.sleep(5000);
+                        break;
+                    case "5":
                         running = false;
                         break;
                     default:
                         System.out.println("Invalid option. Please try again.");
-                        sleep10Seconds();
                 }
+            } catch (InterruptedException e) {
+                System.out.println("Operation interrupted: " + e.getMessage());
+                Thread.currentThread().interrupt();
             }
-
-            scanner.close();
-            System.out.println("Program terminated.");
-
-        } catch (NoSuchAlgorithmException e) {
-            System.out.println("Error generating key pair: " + e.getMessage());
         }
-    }
 
-    private static void sleep10Seconds() {
-        System.out.println("\nWaiting 10 seconds...");
-        try {
-            Thread.sleep(10000);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
+        scanner.close();
+        System.out.println("Program terminated.");
     }
 }

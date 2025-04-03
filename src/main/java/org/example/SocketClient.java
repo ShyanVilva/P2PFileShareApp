@@ -2,63 +2,57 @@ package org.example;
 
 import java.io.*;
 import java.net.Socket;
-import java.security.*;
+import java.util.Scanner;
 
 public class SocketClient {
     private Socket socket;
-    private ObjectOutputStream out;
-    private ObjectInputStream in;
-    private final KeyPair keyPair;
-
-    public SocketClient(KeyPair keyPair) {
-        this.keyPair = keyPair;
-    }
+    private PrintWriter out;
+    private BufferedReader in;
 
     public void connect(String host, int port) {
         try {
             socket = new Socket(host, port);
-            out = new ObjectOutputStream(socket.getOutputStream());
-            in = new ObjectInputStream(socket.getInputStream());
+            out = new PrintWriter(socket.getOutputStream(), true);
+            in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 
             System.out.println("Connected to server at " + host + ":" + port);
 
-            if (authenticate()) {
-                System.out.println("Authentication successful!");
-                // Read peer info
-                String name = (String) in.readObject();
-                Friend.addFriend(name, host, port);
-            } else {
-                System.out.println("Authentication failed!");
+            // Command loop
+            boolean connected = true;
+            Scanner scanner = new Scanner(System.in);
+
+            // Start a separate thread for reading server messages
+            Thread serverReader = new Thread(() -> {
+                try {
+                    String serverMessage;
+                    while ((serverMessage = in.readLine()) != null) {
+                        System.out.println(serverMessage);
+                    }
+                } catch (IOException e) {
+                    if (socket != null && !socket.isClosed()) {
+                        System.out.println("Lost connection to server: " + e.getMessage());
+                    }
+                }
+            });
+            serverReader.setDaemon(true);
+            serverReader.start();
+
+            // Main loop for user input
+            while (connected) {
+                String input = scanner.nextLine().trim();
+                out.println(input);
+
+                if (input.equals("2")) {
+                    connected = false;
+                }
             }
 
         } catch (Exception e) {
             System.out.println("Connection failed: " + e.getMessage());
+            e.printStackTrace();
         } finally {
             disconnect();
         }
-    }
-
-    private boolean authenticate() throws Exception {
-        // Send challenge
-        byte[] challenge = MutualAuthentication.generateChallenge();
-        out.writeObject(challenge);
-
-        // Get signature and verify it
-        byte[] signature = (byte[]) in.readObject();
-        PublicKey theirPublicKey = (PublicKey) in.readObject();
-
-        // Verify their response
-        if (!MutualAuthentication.verifyChallengeSignature(theirPublicKey, challenge, signature)) {
-            return false;
-        }
-
-        // Handle their challenge
-        byte[] theirChallenge = (byte[]) in.readObject();
-        byte[] ourSignature = MutualAuthentication.signChallenge(keyPair.getPrivate(), theirChallenge);
-        out.writeObject(ourSignature);
-        out.writeObject(keyPair.getPublic());
-
-        return true;
     }
 
     private void disconnect() {
