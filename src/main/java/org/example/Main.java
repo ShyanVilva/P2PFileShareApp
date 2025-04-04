@@ -12,8 +12,7 @@ public class Main {
             System.out.println("1. Start Advertising");
             System.out.println("2. Start Peer Discovery");
             System.out.println("3. Connect to Friend");
-            System.out.println("4. Check Server Status");
-            System.out.println("5. Exit");
+            System.out.println("4. Exit");
             System.out.print("Choose an option: ");
 
             String input = scanner.nextLine().trim();
@@ -45,10 +44,6 @@ public class Main {
                         }
                         break;
                     case "4":
-                        SelfAdvertising.getServerInfo();
-                        Thread.sleep(5000);
-                        break;
-                    case "5":
                         running = false;
                         break;
                     default:

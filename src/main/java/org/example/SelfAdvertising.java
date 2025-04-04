@@ -1,11 +1,11 @@
 package org.example;
 
+import javax.jmdns.JmDNS;
+import javax.jmdns.ServiceInfo;
 import java.io.*;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
-import javax.jmdns.JmDNS;
-import javax.jmdns.ServiceInfo;
 import java.util.List;
 
 public class SelfAdvertising {
@@ -65,24 +65,17 @@ public class SelfAdvertising {
 
     private static void handleClient(Socket clientSocket) {
         Thread clientThread = new Thread(() -> {
-            try {
-                OutputStream out = clientSocket.getOutputStream();
-                InputStream in = clientSocket.getInputStream();
-                byte[] buffer = new byte[1024];
+            try (OutputStream out = clientSocket.getOutputStream();
+                 InputStream in = clientSocket.getInputStream();
+                 BufferedReader textIn = new BufferedReader(new InputStreamReader(in));
+                 PrintWriter textOut = new PrintWriter(new OutputStreamWriter(out), true)) {
 
+                byte[] buffer = new byte[1024];
                 System.out.println("Client connected: " + clientSocket.getInetAddress());
 
                 while (true) {
-                    // Send menu
-                    String menu = "\n=== Server Menu ===\n" +
-                            "1. List Files\n" +
-                            "2. Disconnect\n" +
-                            "Choose an option: ";
-                    out.write(menu.getBytes("UTF-8"));
-                    out.flush();
-                    System.out.println("Menu sent to client");
+                    displayMenu(out);
 
-                    // Read client's choice
                     int bytesRead = in.read(buffer);
                     if (bytesRead == -1) {
                         System.out.println("Client disconnected");
@@ -94,34 +87,21 @@ public class SelfAdvertising {
 
                     switch (command) {
                         case "1":
-                            System.out.println("Processing list files command");
-                            String sharedDirectory = "shared";
-                            List<FileManager.FileInfo> files = FileManager.getDirectoryListing(sharedDirectory);
-
-                            StringBuilder response = new StringBuilder("Files available:\n");
-                            for (FileManager.FileInfo file : files) {
-                                response.append(file.toString()).append("\n");
-                            }
-                            response.append("End of list\n");
-
-                            out.write(response.toString().getBytes("UTF-8"));
-                            out.flush();
-                            System.out.println("Files list sent");
+                            listFiles(out);
                             break;
-
                         case "2":
-                            System.out.println("Client requested disconnect");
+                            textOut.println("Please enter the filename you want to download:");
+                            textOut.flush();
+                            String filename = textIn.readLine().trim();
+                            sendFile(out, filename);
+                            break;
+                        case "3":
                             return;
-
                         default:
-                            String error = "Invalid option.\n";
-                            out.write(error.getBytes("UTF-8"));
-                            out.flush();
-                            System.out.println("Sent error response");
+                            handleInvalidOption(out);
                             break;
                     }
                 }
-
             } catch (Exception e) {
                 System.out.println("Error handling client: " + e.getMessage());
                 e.printStackTrace();
@@ -130,35 +110,69 @@ public class SelfAdvertising {
         clientThread.start();
     }
 
-    public static boolean isServerRunning() {
-        return isAdvertising && serverSocket != null && !serverSocket.isClosed();
-    }
-
-    public static void getServerInfo() {
-        if (isServerRunning()) {
-            System.out.println("Server Status:");
-            System.out.println("- Running: Yes");
-            System.out.println("- Port: " + serverSocket.getLocalPort());
-            System.out.println("- Bound Address: " + serverSocket.getInetAddress());
-            if (serviceInfo != null) {
-                System.out.println("- Service Name: " + serviceInfo.getName());
-                System.out.println("- Service Type: " + serviceInfo.getType());
+    private static void sendFile(OutputStream out, String filename) {
+        File file = new File("shared", filename);
+        if (!file.exists() || file.isDirectory()) {
+            try {
+                out.write("File not found\n".getBytes("UTF-8"));
+                out.flush();
+            } catch (IOException e) {
+                System.out.println("Error sending file not found message: " + e.getMessage());
             }
-        } else {
-            System.out.println("Server is not running");
+            return;
         }
-    }
 
-    public static void stopAdvertising() {
-        isAdvertising = false;
-        try {
-            if (serverSocket != null) serverSocket.close();
-            if (jmdns != null) {
-                jmdns.unregisterAllServices();
-                jmdns.close();
+        try (FileInputStream fileIn = new FileInputStream(file)) {
+            out.write(("Starting download of " + filename + "\n").getBytes("UTF-8"));
+            out.flush();
+
+            byte[] buffer = new byte[1024];
+            int bytesRead;
+            while ((bytesRead = fileIn.read(buffer)) != -1) {
+                out.write(buffer, 0, bytesRead);
             }
+            out.flush();
+
+            out.write("EOF\n".getBytes("UTF-8"));
+            out.flush();
+            System.out.println("File " + filename + " sent successfully");
+
         } catch (IOException e) {
-            System.out.println("Error stopping advertising: " + e.getMessage());
+            System.out.println("Error sending file: " + e.getMessage());
         }
     }
+
+    private static void displayMenu(OutputStream out) throws IOException {
+        String menuOptions = "\n=== Server Menu ===\n" +
+                "1. List Files\n" +
+                "2. Download File\n" +
+                "3. Disconnect\n";
+        out.write(menuOptions.getBytes("UTF-8"));
+        out.flush();
+    }
+
+    private static void listFiles(OutputStream out) throws IOException {
+        System.out.println("Processing list files command");
+        String sharedDirectory = "shared";
+        List<FileManager.FileInfo> files = FileManager.getDirectoryListing(sharedDirectory);
+
+        StringBuilder response = new StringBuilder("Files available:\n");
+        for (FileManager.FileInfo file : files) {
+            response.append(file.toString()).append("\n");
+        }
+        response.append("End of list\n\nChoose an option: ");
+
+        out.write(response.toString().getBytes("UTF-8"));
+        out.flush();
+        System.out.println("Files list sent");
+    }
+
+    private static void handleInvalidOption(OutputStream out) throws IOException {
+        String error = "Invalid option.\n\nChoose an option: ";
+        out.write(error.getBytes("UTF-8"));
+        out.flush();
+        System.out.println("Sent error response");
+    }
+
+
 }
