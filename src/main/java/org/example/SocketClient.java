@@ -127,7 +127,7 @@ public class SocketClient {
 
         // Decrypt data (nonce handling is done inside decrypt method)
         byte[] decData = keyExchange.decrypt(encData);
-
+        System.out.println(new String(decData, "UTF-8"));
     }
 
     private static void downloadFile(String fileName, InputStream in, ECDH keyExchange) throws Exception {
