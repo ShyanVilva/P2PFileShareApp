@@ -10,8 +10,7 @@ On line 51 in "PeerDiscovery.java" and line 37 in "SelfAdvertising.java" please 
 2. Run the program: mvn compile exec:java
 
 
-To test functionality, simply open two terminals and communicate between the two.
-If a feature isn't working correctly please restart the program, I was having some issues with multithreading and couldn't get it fixed in time.
+To test functionality, open two terminals and use the menu options each performing a different task from the deliverables.
 
 Files downloaded from the server are stored in "downloads"
 Files advertised by a client are stored in "shared"
